@@ -171,7 +171,7 @@ def _dnn_linear_combined_model_fn(
   if not linear_feature_columns:
     linear_logits = None
   else:
-    if instance(linear_optimizer, six.string_types):
+    if isinstance(linear_optimizer, six.string_types):
       linear_optimizer = optimizers.get_optimizer_instance(
         **{'linear_optimizer':linear_optimizer, 'learning_rate':_linear_learning_rate(len(linear_feature_columns))})
     else:

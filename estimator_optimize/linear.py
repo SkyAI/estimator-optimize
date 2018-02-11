@@ -100,15 +100,12 @@ def _linear_model_fn(features, labels, mode, head, feature_columns, optimizer,
   if not isinstance(features, dict):
     raise ValueError('features should be a dictionary of `Tensor`s. '
                      'Given type: {}'.format(type(features)))
-  #optimizer = optimizers.get_optimizer_instance(
-  #    optimizer or _get_default_optimizer(feature_columns),
-  #    learning_rate=_LEARNING_RATE)
   if isinstance(optimizer, six.string_types):
     optimizer = optimizers.get_optimizer_instance(
         optimizer or _get_default_optimizer(feature_columns),
         learning_rate=_LEARNING_RATE)
   else:
-    optimizer = optimizers.get_optimizer_instance(**params)
+    optimizer = optimizers.get_optimizer_instance(**optimizer)
 
   num_ps_replicas = config.num_ps_replicas if config else 0
 

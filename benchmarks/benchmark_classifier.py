@@ -1,15 +1,20 @@
 """
-This code implements benchmark for the black box optimization algorithms,
-applied to a task of optimizing parameters of ML algorithms for the task
-of supervised learning.
 
-The code implements benchmark on 4 datasets where parameters for 6 classes
-of supervised models are tuned to optimize performance on datasets. Supervised
-learning models implementations are taken from sklearn.
+('LinearClassifier', 'digits')
+takes 2 hours and 10 minute
+|Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
+------------------|------------|-----------|---------------------|--------------------|-----------------------
+| forest_minimize | -0.967 +/- 0.006 | -0.976 | 18.200 | 10.332 | 2.000
 
-Regression learning task is solved on 2 datasets, and classification on the
-rest of datasets. 3 model classes are regression models, and rest are
-classification models.
+Classification
+|Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
+------------------|------------|-----------|---------------------|--------------------|-----------------------
+| gbrt_minimize | -0.968 +/- 0.005 | -0.976 | 15.900 | 15.202 | 0.000
+
+Classification
+|Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
+------------------|------------|-----------|---------------------|--------------------|-----------------------
+| gp_minimize | -0.971 +/- 0.005 | -0.981 | 34.500 | 10.404 | 15.000
 """
 from collections import defaultdict
 from datetime import datetime
@@ -41,21 +46,12 @@ from estimator_optimize.optimizer import forest_minimize
 from estimator_optimize.space import Categorical
 from estimator_optimize.space import Integer
 from estimator_optimize.space import Real
-
-import tensorflow as tf
-from tensorflow.python.ops import nn
-
-from estimator_optimize import linear
-from estimator_optimize import dnn
-from estimator_optimize import dnn_linear_combined
-from estimator_optimize import head
-
 from estimator_optimize.linear import LinearClassifier
 from estimator_optimize.dnn import DNNClassifier
 from estimator_optimize.dnn_linear_combined import DNNLinearCombinedClassifier
 
-MODEL_PARAMETERS = "model parameters"
-MODEL_BACKEND = "model backend"
+import tensorflow as tf
+from tensorflow.python.ops import nn
 
 # functions below are used to apply non - linear maps to parameter values, eg
 # -3.0 -> 0.001
@@ -273,7 +269,8 @@ class MLBench(object):
         if self.model == LinearClassifier:
             estimator = self.model(feature_columns=linear_feature_columns,
                                    model_dir="/tmp/tmpNIBUY",
-                                   optimizer=linear_optimizer
+                                   optimizer=linear_optimizer,
+                                   n_classes=len(np.unique(y_train)),
                                    )
         elif self.model == DNNClassifier:
             estimator = self.model(hidden_units=[1024, 512, 256],
@@ -299,10 +296,12 @@ class MLBench(object):
             estimator.train(input_fn=train_input_fn, steps=point_mapped['steps'])
 
             accuracy_score = estimator.evaluate(input_fn=test_input_fn)["accuracy"]
+            print("accuracy_score:%s" % accuracy_score)
             if math.isnan(accuracy_score):
                 accuracy_score = min_obj_val
             accuracy_score = max(accuracy_score, min_obj_val) 
         except BaseException as ex:
+            print(ex)
             accuracy_score = min_obj_val
 
         return accuracy_score

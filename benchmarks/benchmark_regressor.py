@@ -1,15 +1,5 @@
 """
-This code implements benchmark for the black box optimization algorithms,
-applied to a task of optimizing parameters of ML algorithms for the task
-of supervised learning.
 
-The code implements benchmark on 4 datasets where parameters for 6 classes
-of supervised models are tuned to optimize performance on datasets. Supervised
-learning models implementations are taken from sklearn.
-
-Regression learning task is solved on 2 datasets, and classification on the
-rest of datasets. 3 model classes are regression models, and rest are
-classification models.
 """
 from collections import defaultdict
 from datetime import datetime
@@ -45,16 +35,18 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import r2_score
 from sklearn.metrics import log_loss
 
-from skopt import gbrt_minimize
-from skopt import gp_minimize
-from skopt import forest_minimize
-from skopt.space import Categorical
-from skopt.space import Integer
-from skopt.space import Real
+from estimator_optimize.optimizer import gbrt_minimize
+from estimator_optimize.optimizer import gp_minimize
+from estimator_optimize.optimizer import forest_minimize
+from estimator_optimize.space import Categorical
+from estimator_optimize.space import Integer
+from estimator_optimize.space import Real
+from estimator_optimize.linear import LinearRegressor
+from estimator_optimize.dnn import DNNRegressor
+from estimator_optimize.dnn_linear_combined import DNNLinearCombinedRegressor
 
-
-MODEL_PARAMETERS = "model parameters"
-MODEL_BACKEND = "model backend"
+import tensorflow as tf
+from tensorflow.python.ops import nn
 
 # functions below are used to apply non - linear maps to parameter values, eg
 # -3.0 -> 0.001
@@ -68,47 +60,76 @@ def nop(x):
     return x
 
 linearparams = {
-    'optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
-    'learning_rate': (Real(-5.0, -1), pow10map),
-    'initial_accumulator_value': (Real(0.01, 0.1), nop),
-    'beta1': (Real(0.1, 0.98), nop),
-    'beta_2': (Real(0.1, 0.9999999), nop),
-    'epsilon': (Real(-10.0, -5.0), pow10map),
-    'learning_rate_power': (Real(-0.5, -0.7), nop),
-    'l1_regularization_strength': (Real(0.0, 0.1), nop),
-    'l2_regularization_strength': (Real(0.0, 0.1), nop),
-    'l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
-    'decay': (Real(0.1, 0.9), nop),
-    'momentum': (Real(0.0, 0.1), nop),
+    #'linear.optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
+    'linear.optimizer': (Categorical(['Adagrad', 'Adam', 'SGD']), nop),
+    'linear.learning_rate': (Real(-5.0, -1), pow10map),
+    'linear.initial_accumulator_value': (Real(0.01, 0.1), nop),
+    'linear.beta1': (Real(0.1, 0.98), nop),
+    'linear.beta2': (Real(0.1, 0.9999999), nop),
+    'linear.epsilon': (Real(-10.0, -5.0), pow10map),
+    'linear.learning_rate_power': (Real(-0.5, -0.0), nop),
+    'linear.l1_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.l2_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.decay': (Real(0.1, 0.9), nop),
+    'linear.momentum': (Real(0.0, 0.1), nop),
+    'steps':(Real(5.0, 8.0), pow2intmap),
 }
 
-dnnparams {
-    'optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
-    'activation_fn': (Categorical([nn.relu, , nn.tanh, nn.elu, nn.sigmoid]), nop),
+dnnparams = {
+    'dnn.optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
+    'dnn.learning_rate': (Real(-5.0, -1), pow10map),
+    'dnn.initial_accumulator_value': (Real(0.01, 0.1), nop),
+    'dnn.beta1': (Real(0.1, 0.98), nop),
+    'dnn.beta2': (Real(0.1, 0.9999999), nop),
+    'dnn.epsilon': (Real(-10.0, -5.0), pow10map),
+    'dnn.learning_rate_power': (Real(-0.5, 0.0), nop),
+    'dnn.l1_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.l2_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.decay': (Real(0.1, 0.9), nop),
+    'dnn.momentum': (Real(0.0, 0.1), nop),
+    'activation_fn': (Categorical([nn.relu, nn.tanh, nn.elu, nn.sigmoid]), nop),
     'dropout': (Real(0.5, 0.9), nop),
-    'hidden_units':(Categorical([[1024, 512, 256], [512, 256, 128]]), nop),
-    'learning_rate': (Real(-5.0, -1), pow10map),
-    'initial_accumulator_value': (Real(0.01, 0.1), nop),
-    'beta1': (Real(0.1, 0.98), nop),
-    'beta_2': (Real(0.1, 0.9999999), nop),
-    'epsilon': (Real(-10.0, -5.0), pow10map),
-    'learning_rate_power': (Real(-0.5, -0.7), nop),
-    'l1_regularization_strength': (Real(0.0, 0.1), nop),
-    'l2_regularization_strength': (Real(0.0, 0.1), nop),
-    'l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
-    'decay': (Real(0.1, 0.9), nop),
-    'momentum': (Real(0.0, 0.1), nop),
+    'steps':(Real(5.0, 8.0), pow2intmap),
+    #'hidden_units':(Categorical([[1024, 512, 256], [512, 256, 128]]), nop),
 }
 
-dlparams {
-    'linearparams': linearparams,
-    'dnnparams': dnnparams,
+dlparams = {
+    'linear.optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
+    'linear.learning_rate': (Real(-5.0, -1), pow10map),
+    'linear.initial_accumulator_value': (Real(0.01, 0.1), nop),
+    'linear.beta1': (Real(0.1, 0.98), nop),
+    'linear.beta2': (Real(0.1, 0.9999999), nop),
+    'linear.epsilon': (Real(-10.0, -5.0), pow10map),
+    'linear.learning_rate_power': (Real(-0.5, -0.0), nop),
+    'linear.l1_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.l2_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
+    'linear.decay': (Real(0.1, 0.9), nop),
+    'linear.momentum': (Real(0.0, 0.1), nop),
+    'dnn.optimizer': (Categorical(['Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD']), nop),
+    'dnn.learning_rate': (Real(-5.0, -1), pow10map),
+    'dnn.initial_accumulator_value': (Real(0.01, 0.1), nop),
+    'dnn.beta1': (Real(0.1, 0.98), nop),
+    'dnn.beta2': (Real(0.1, 0.9999999), nop),
+    'dnn.epsilon': (Real(-10.0, -5.0), pow10map),
+    'dnn.learning_rate_power': (Real(-0.5, 0.0), nop),
+    'dnn.l1_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.l2_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.l2_shrinkage_regularization_strength': (Real(0.0, 0.1), nop),
+    'dnn.decay': (Real(0.1, 0.9), nop),
+    'dnn.momentum': (Real(0.0, 0.1), nop),
+    'dnn_activation_fn': (Categorical([nn.relu, nn.tanh, nn.elu, nn.sigmoid]), nop),
+    'dnn_dropout': (Real(0.5, 0.9), nop),
+    'steps':(Real(5.0, 8.0), pow2intmap),
+    #'hidden_units':(Categorical([[1024, 512, 256], [512, 256, 128]]), nop),
 }
 
 MODELS = {
-    LinearRegressor: linearparams,
-    DNNRegressor: dnnparams,
-    #DNNLinearCombinedRegressor: dlparams,
+    #LinearRegressor: linearparams,
+    #DNNRegressor: dnnparams,
+    DNNLinearCombinedRegressor: dlparams,
 }
 
 # every dataset should have have a mapping to the mixin that can handle it.
@@ -224,29 +245,58 @@ class MLBench(object):
             y=np.array(y_test),
             num_epochs=1,
             shuffle=False)
-        linear_feature_columns = [tf.feature_column.numeric_column("x", shape=[4])]
+        shape = [X_train.shape[1]]
+        linear_feature_columns = [tf.feature_column.numeric_column("x", shape=shape)]
 
         # apply transformation to model parameters, for example exp transformation
         point_mapped = {}
+        dnn_optimizer = {}
+        linear_optimizer = {}
         for param, val in point.items():
-            point_mapped[param] = self.space[param][1](val)
+            if param[0:4] == "dnn.":
+                dnn_optimizer[param[4:]] = self.space[param][1](val)
+            elif param[0:7] == "linear.":
+                linear_optimizer[param[7:]] = self.space[param][1](val)
+            else:
+                point_mapped[param] = self.space[param][1](val)
 
-        if isinstance(self.model, LinearRegressor) or isinstance(self.model, DNNRegressor):
-            model_instance = self.model(feature_columns=linear_feature_columns,
-                                        params=point_mapped)
-        elif isinstance(self.model, DNNLinearRegressor):
-            model_instance = self.model(linear_feature_columns=linear_feature_columns,
-                                        linearparams=point_mapped.linearparams,
-                                        dnn_feature_columns=[],
-                                        dnnparams=point_mapped.dnnparams)
+        import os;os.system("rm -rf /tmp/tmpNIBUY")
+        if self.model == LinearRegressor:
+            estimator = self.model(feature_columns=linear_feature_columns,
+                                   model_dir="/tmp/tmpNIBUY",
+                                   optimizer=linear_optimizer,
+                                   )
+        elif self.model == DNNRegressor:
+            estimator = self.model(hidden_units=[1024, 512, 256],
+                                   feature_columns=linear_feature_columns,
+                                   model_dir="/tmp/tmpNIBUY",
+                                   optimizer=dnn_optimizer,
+                                   activation_fn=point_mapped['activation_fn'],
+                                   dropout=point_mapped['dropout']
+                                   )
+        elif self.model == DNNLinearCombinedRegressor:
+            estimator = self.model(linear_feature_columns=linear_feature_columns,
+                                   model_dir="/tmp/tmpNIBUY",
+                                   dnn_feature_columns=[],
+                                   linear_optimizer=linear_optimizer,
+                                   dnn_optimizer=dnn_optimizer,
+                                   dnn_activation_fn=point_mapped['dnn_activation_fn'],
+                                   dnn_dropout=point_mapped['dnn_dropout']
+                                   )
+        max_loss = 5000.0
+        try:
+            estimator.train(input_fn=train_input_fn, steps=point_mapped['steps'])
 
-        estimator = self.model(**point_mapped)
+            average_loss = estimator.evaluate(input_fn=test_input_fn)["average_loss"]
+            print("average_loss:%s" % average_loss)
+            if math.isnan(average_loss):
+                average_loss = max_loss
+            accuracy_score = min(accuracy_score, max_loss) 
+        except BaseException as ex:
+            print(ex)
+            average_loss = max_loss
 
-        estimator.train(input_fn=input_fn_train)
-
-        accuracy_score = estimator.evaluate(input_fn=input_fn_test)["accuracy"]
-        
-        return score
+        return average_loss
 
 # this is necessary to generate table for README in the end
 table_template = """|Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
@@ -348,8 +398,8 @@ def evaluate_optimizer(surrogate_minimize, model, dataset, n_calls, random_state
     def objective(x):
         # convert list of dimension values to dictionary
         x = dict(zip(dimensions_names, x))
-        # the result of "evaluate" is accuracy / r^2, which is the more the better
-        y = -problem.evaluate(x)
+        # the result of "evaluate" is average_loss, which is the less the better
+        y = problem.evaluate(x)
         return y
 
     # optimization loop
