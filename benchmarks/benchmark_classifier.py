@@ -6,12 +6,10 @@ takes 2 hours and 10 minute
 ------------------|------------|-----------|---------------------|--------------------|-----------------------
 | forest_minimize | -0.967 +/- 0.006 | -0.976 | 18.200 | 10.332 | 2.000
 
-Classification
 |Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
 ------------------|------------|-----------|---------------------|--------------------|-----------------------
 | gbrt_minimize | -0.968 +/- 0.005 | -0.976 | 15.900 | 15.202 | 0.000
 
-Classification
 |Blackbox Function| Minimum | Best minimum | Mean f_calls to min | Std f_calls to min | Fastest f_calls to min
 ------------------|------------|-----------|---------------------|--------------------|-----------------------
 | gp_minimize | -0.971 +/- 0.005 | -0.981 | 34.500 | 10.404 | 15.000
@@ -138,7 +136,7 @@ MODELS = {
 }
 
 # every dataset should have have a mapping to the mixin that can handle it.
-DATASETS = ["digits"]
+DATASETS = ["Climate Model Crashes"]
 #DATASETS = ["digits", "Climate Model Crashes"]
 
 # bunch of dataset preprocessing functions below
@@ -333,8 +331,6 @@ def calculate_performance(all_data):
                 # leave only best objective values at particular iteration
                 best = [[v[-1] for v in d] for d in data]
 
-                supervised_learning_type = "Regression" if ("Regressor" in model) else "Classification"
-
                 # for every item in sorted_traces it is 2d array, where first dimension corresponds to
                 # particular repeat of experiment, and second dimension corresponds to index
                 # of optimization step during optimization
@@ -360,11 +356,10 @@ def calculate_performance(all_data):
         def fmt(float_value):
             return ("%.3f" % float_value)
 
-        output = str(key[0]) + " | " + " | ".join(
+        output = str(key) + " | " + " | ".join(
             [fmt(min_mean) + " +/- " + fmt(min_stdd)] + [fmt(v) for v in [min_best, f_mean, f_stdd, f_best]])
         result = table_template + output
         print("")
-        print(key[1])
         print(result)
 
 def evaluate_optimizer(surrogate_minimize, model, dataset, n_calls, random_state):
@@ -440,7 +435,8 @@ def run(n_calls=32, n_runs=1, save_traces=True, n_jobs=1):
     * `n_jobs`: int
         Number of different repeats of optimization to run in parallel.
     """
-    surrogate_minimizers = [gbrt_minimize, forest_minimize, gp_minimize]
+    #surrogate_minimizers = [gbrt_minimize, forest_minimize, gp_minimize]
+    surrogate_minimizers = [gp_minimize]
     selected_models = sorted(MODELS, key=lambda x: x.__name__)
 
     # all the parameter values and objectives collected during execution are stored in list below
